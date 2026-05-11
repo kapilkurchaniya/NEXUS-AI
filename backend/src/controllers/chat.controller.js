@@ -29,19 +29,21 @@ export async function sendMessage(req, res) {
 
         // CREATE NEW CHAT
         if (!chatId) {
-
-            chatTitle = message.substring(0, 30);
+            // Generate a proper title using Mistral AI based on first user prompt
+            const generated = await generateChatTitle(message);
+            chatTitle = String(generated ?? "New Chat")
+                .replace(/^\s*['"]|['"]\s*$/g, "")
+                .replace(/\s+/g, " ")
+                .trim();
+            chatTitle = chatTitle.length > 60 ? chatTitle.slice(0, 60).trim() : chatTitle;
 
             chat = await ChatModel.create({
                 user: req.user.id,
-                title: chatTitle
+                title: chatTitle || "New Chat"
             });
-
         } else {
-
-            // FIND EXISTING CHAT
-            chat = await ChatModel.findById(chatId);
-
+            // FIND EXISTING CHAT (must belong to user)
+            chat = await ChatModel.findOne({ _id: chatId, user: req.user.id });
             if (!chat) {
                 return res.status(404).json({
                     success: false,
@@ -49,6 +51,7 @@ export async function sendMessage(req, res) {
                 });
             }
         }
+
 
         // GET OLD CHAT MESSAGES
         const oldMessages = await MessageModel
@@ -116,16 +119,28 @@ export async function sendMessage(req, res) {
 }
 
 export async function getChats(req, res) {
-
     const user = req.user.id;
 
     const chats = await ChatModel.find({ user }).sort({ createdAt: -1 });
 
+    // Attach a preview for each thread (latest message)
+    const chatsWithPreview = await Promise.all(
+        chats.map(async (c) => {
+            const lastMessage = await MessageModel.findOne({ chat: c._id })
+                .sort({ createdAt: -1 });
+            return {
+                ...c.toObject(),
+                lastMessage: lastMessage?.content || c.title,
+            };
+        })
+    );
+
     res.status(200).json({
         success: true,
-        chats
+        chats: chatsWithPreview,
     });
-}   
+}  
+
 
 export async function getMessages(req, res) {
 
