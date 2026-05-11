@@ -12,15 +12,19 @@ const mistralmodel = new ChatMistralAI({
   apiKey: process.env.MISTRAL_API_KEY,
 });
 
-export async function generateResponse(message) {
+export async function generateResponse(messages) {
 
     try {
 
-        console.log("Received message for AI processing:", message);
+        console.log("Received message for AI processing:", messages);
 
-        const response = await geminimodel.invoke([
-            new HumanMessage(message)
-        ]);
+        const prompt = Array.isArray(messages)
+            ? messages
+            : typeof messages === "string"
+                ? [new HumanMessage(messages)]
+                : [messages];
+
+        const response = await geminimodel.invoke(prompt);
 
         console.log("Generated AI response:", response.content);
 
@@ -39,7 +43,7 @@ export async function generateChatTitle(message) {
   try { 
 
     const response = await mistralmodel.invoke([
-      new SystemMessage("You are a helpful assistant that generates a chat title. The title should be concise, ideally less than 5 words, and should capture the essence of the conversation. Please provide only the title without any additional text.  Here is the message: " + message),
+      new SystemMessage("You are a helpful assistant that generates a chat title. The title should be concise, ideally less than 8 words, and should capture the essence of the conversation. Please provide only the title without any additional text.  Here is the message: " + message),
       new HumanMessage(message)
     ]);
 

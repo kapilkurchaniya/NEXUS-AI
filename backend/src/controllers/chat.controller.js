@@ -112,4 +112,59 @@ export async function sendMessage(req, res) {
             message: error.message
         });
     }
+
+}
+
+export async function getChats(req, res) {
+
+    const user = req.user.id;
+
+    const chats = await ChatModel.find({ user }).sort({ createdAt: -1 });
+
+    res.status(200).json({
+        success: true,
+        chats
+    });
+}   
+
+export async function getMessages(req, res) {
+
+    const { chatId } = req.params;
+
+    const chat = await ChatModel.findOne({ _id: chatId, user: req.user.id });
+    if (!chat) {
+        return res.status(404).json({
+            success: false,
+            message: "Chat not found"
+        });
+    }
+
+
+    const messages = await MessageModel.find({ chat: chatId }).sort({ createdAt: 1 });
+
+    res.status(200).json({
+        success: true,
+        messages
+    });
+}
+
+export async function deleteChat(req, res) {
+
+    const { chatId } = req.params;
+
+    const chat = await ChatModel.findOne({ _id: chatId, user: req.user.id });
+    if (!chat) {
+        return res.status(404).json({
+            success: false,
+            message: "Chat not found"
+        });
+    }
+
+    await MessageModel.deleteMany({ chat: chatId });
+    await ChatModel.findByIdAndDelete(chatId);
+
+    res.status(200).json({
+        success: true,
+        message: "Chat deleted successfully"
+    });
 }
