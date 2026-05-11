@@ -1,288 +1,270 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { useChat } from '../chat/hooks/useChat';
-import { useLocation, useNavigate, useParams } from 'react-router';
+import { useState, useMemo } from "react";
+import { useNavigate } from "react-router";
+import { useDispatch, useSelector } from "react-redux";
+import { useChat } from "../chat/hooks/useChat";
+import { setCurrentChatId, addMessage, setMessages } from "../chat/chat.slice";
 
-import { setCurrentChatId } from '../chat/chat.slice';
+/* ── Icons ── */
+const IconSearch = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8" />
+    <path d="M21 21l-4.35-4.35" />
+  </svg>
+);
 
+const IconArrow = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="5" y1="12" x2="19" y2="12" />
+    <polyline points="12 5 19 12 12 19" />
+  </svg>
+);
+
+const IconSpark = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+  </svg>
+);
+
+/* ── Quick-action cards config ── */
+const quickActions = [
+  {
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="16" y1="13" x2="8" y2="13" />
+        <line x1="16" y1="17" x2="8" y2="17" />
+      </svg>
+    ),
+    label: "Summarize an article",
+    color: "#22c55e",
+    prompt: "Summarize this article for me: ",
+  },
+  {
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="16 18 22 12 16 6" />
+        <polyline points="8 6 2 12 8 18" />
+      </svg>
+    ),
+    label: "Write a code snippet",
+    color: "#6366f1",
+    prompt: "Write a code snippet for: ",
+  },
+  {
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10" />
+        <line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" />
+      </svg>
+    ),
+    label: "Analyze dataset",
+    color: "#f59e0b",
+    prompt: "Help me analyze this dataset: ",
+  },
+  {
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
+      </svg>
+    ),
+    label: "Debug an error",
+    color: "#ef4444",
+    prompt: "Help me debug this error: ",
+  },
+];
+
+/* ── Greeting helper ── */
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+/* ══════════════════════════════════════════
+   HOME PAGE
+   ══════════════════════════════════════════ */
 function Home() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { chatId } = useParams();
   const dispatch = useDispatch();
+  const { handleSendMessage } = useChat();
+  const user = useSelector((s) => s.auth.user);
 
-  const chat = useChat();
-  const { chats } = useSelector((s) => s.chat);
+  const [message, setMessage] = useState("");
+  const [isSending, setIsSending] = useState(false);
 
-  const [message, setMessage] = useState('');
-  const [isChatDrawerOpen, setIsChatDrawerOpen] = useState(false);
+  const greeting = useMemo(() => getGreeting(), []);
 
-  const activeChatId = useMemo(() => {
-    if (location.pathname.startsWith('/chat/') && chatId) return chatId;
-    return null;
-  }, [location.pathname, chatId]);
+  const onCreateChat = async (text) => {
+    const trimmed = (text || message).trim();
+    if (!trimmed || isSending) return;
 
-  useEffect(() => {
-    chat.initializeSocketConnection();
-    chat.loadChats?.().catch(() => {});
-    // run once on mount to avoid re-calling /api/chat continuously
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setIsSending(true);
+    setMessage("");
 
+    // Clear old messages and set optimistic user message
+    dispatch(setMessages([]));
+    dispatch(addMessage({ role: "user", content: trimmed }));
 
-  const onSelectChat = (id) => {
-    dispatch(setCurrentChatId(id));
-    setIsChatDrawerOpen(false);
-    navigate(`/chat/${id}`);
-  };
-
-  const onCreateChatFromSearch = async () => {
-    const text = message.trim();
-    if (!text) return;
-
-    const res = await chat.handleSendMessage({ chatId: null, message: text });
-    setMessage('');
-
-    const newChatId = res?.chatId;
-    if (newChatId) onSelectChat(newChatId);
-    else navigate('/chat');
+    try {
+      const res = await handleSendMessage({ chatId: null, message: trimmed });
+      const newChatId = res?.chatId;
+      if (newChatId) {
+        dispatch(setCurrentChatId(newChatId));
+        navigate(`/chat/${newChatId}`);
+      } else {
+        navigate("/chat");
+      }
+    } catch {
+      // Error handled in useChat
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
-    <div className="min-h-screen flex bg-[#0a1020] text-white">
-      {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-80 bg-[#151a2b] flex-col justify-between py-6 px-5 min-h-screen border-r border-[#232946] sticky top-0 h-screen">
-        <div>
-          <div className="flex items-center gap-3 mb-8">
-            <img
-              src="https://randomuser.me/api/portraits/men/32.jpg"
-              alt="avatar"
-              className="w-12 h-12 rounded-full object-cover border-2 border-[#232946]"
-            />
-            <div>
-              <div className="font-semibold text-lg">Analytical Pilot</div>
-              <div className="text-xs text-[#7f9cf5]">Pro Plan</div>
-            </div>
-          </div>
-
-          <button
-            className="w-full bg-[#7f9cf5] hover:bg-[#5a6fdc] text-[#151a2b] font-semibold py-3 rounded-xl mb-8 transition text-lg flex items-center justify-center gap-2"
-            onClick={() => navigate('/chat')}
+    <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 min-h-screen">
+      <div className="w-full max-w-2xl animate-fade-in-up">
+        {/* Hero */}
+        <div className="text-center mb-10">
+          <div
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold mb-6"
+            style={{
+              background: "var(--accent-glow)",
+              color: "var(--text-accent)",
+              border: "1px solid rgba(99,102,241,0.2)",
+            }}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path d="M12 4v16m8-8H4" />
-            </svg>
-            New Chat
-          </button>
-
-          <div>
-            <div className="text-xs text-[#bfc9d9] font-semibold mb-2 tracking-widest">RECENT THREADS</div>
-            <ul className="space-y-2">
-              {Array.isArray(chats) &&
-                chats.map((c) => {
-                  const isActive = activeChatId === c?._id;
-                  const lastPreview = c?.lastMessage || c?.title || 'New conversation';
-
-                  return (
-                    <li
-                      key={c?._id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => onSelectChat(c?._id)}
-                      onKeyDown={(e) => e.key === 'Enter' && onSelectChat(c?._id)}
-                      className={`flex items-center gap-3 text-[#e5e9f7] hover:bg-[#232946] rounded-lg px-2 py-2 cursor-pointer transition ${
-                        isActive ? 'bg-[#232946] border border-[#7f9cf5]' : ''
-                      }`}
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-[#181f36] border border-[#232946] flex items-center justify-center">
-                        <svg className="w-5 h-5 text-[#7f9cf5]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                        </svg>
-                      </div>
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">{c?.title || 'New Chat'}</div>
-                        <div className="truncate text-xs text-[#bfc9d9] opacity-90">{lastPreview}</div>
-                      </div>
-                    </li>
-                  );
-                })}
-            </ul>
+            <IconSpark />
+            Powered by AI
           </div>
 
-          <div className="mt-8">
-            <div className="text-xs text-[#bfc9d9] font-semibold mb-2 tracking-widest">WORKSPACE</div>
-            <ul className="space-y-2">
-              <li className="flex items-center gap-3 text-[#e5e9f7] hover:bg-[#232946] rounded-lg px-2 py-2 cursor-pointer transition">
-                <svg className="w-5 h-5 text-[#bfc9d9]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <rect x="3" y="5" width="18" height="14" rx="2" />
-                  <path d="M3 7h18" />
-                </svg>
-                <span className="truncate text-sm">Collections</span>
-              </li>
-              <li className="flex items-center gap-3 text-[#e5e9f7] hover:bg-[#232946] rounded-lg px-2 py-2 cursor-pointer transition">
-                <svg className="w-5 h-5 text-[#bfc9d9]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 16v-4" />
-                  <path d="M12 8h.01" />
-                </svg>
-                <span className="truncate text-sm">Settings</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 bg-[#181f36] rounded-xl px-4 py-2 mt-8">
-          <span className="w-3 h-3 rounded-full bg-green-400 inline-block" />
-          <span className="text-sm text-[#bfc9d9]">System Status</span>
-          <span className="ml-auto text-green-400 text-sm font-semibold">Online</span>
-        </div>
-      </aside>
-
-      {/* Tablet placeholder (structure preserved) */}
-      <div className="hidden md:block lg:hidden w-[320px]">
-        {/* reserved */}
-      </div>
-
-      {/* Mobile drawer */}
-      <div className="md:hidden">
-        <button
-          className="fixed top-4 left-4 z-50 w-11 h-11 rounded-xl bg-[#181f36] border border-[#232946] flex items-center justify-center"
-          onClick={() => setIsChatDrawerOpen(true)}
-          aria-label="Open chat sidebar"
-        >
-          <svg className="w-6 h-6 text-[#bfc9d9]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-
-        {isChatDrawerOpen ? (
-          <div className="fixed inset-0 z-50">
-            <div className="absolute inset-0 bg-black/50" onClick={() => setIsChatDrawerOpen(false)} />
-            <div className="absolute left-0 top-0 bottom-0 w-80 bg-[#151a2b] border-r border-[#232946] p-6 overflow-y-auto">
-              <div className="flex items-center justify-between mb-6">
-                <div className="font-semibold">Chats</div>
-                <button
-                  className="w-10 h-10 rounded-xl bg-[#181f36] border border-[#232946] flex items-center justify-center"
-                  onClick={() => setIsChatDrawerOpen(false)}
-                >
-                  <svg className="w-5 h-5 text-[#bfc9d9]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              <ul className="space-y-2">
-                {Array.isArray(chats) &&
-                  chats.map((c) => {
-                    const isActive = activeChatId === c?._id;
-
-                    return (
-                      <li
-                        key={c?._id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => onSelectChat(c?._id)}
-                        className={`flex items-center gap-3 text-[#e5e9f7] hover:bg-[#232946] rounded-lg px-2 py-2 cursor-pointer transition ${
-                          isActive ? 'bg-[#232946] border border-[#7f9cf5]' : ''
-                        }`}
-                      >
-                        <div className="w-8 h-8 rounded-lg bg-[#181f36] border border-[#232946] flex items-center justify-center">
-                          <svg className="w-5 h-5 text-[#7f9cf5]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                          </svg>
-                        </div>
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium">{c?.title || 'New Chat'}</div>
-                        </div>
-                      </li>
-                    );
-                  })}
-              </ul>
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col items-center px-4 py-8">
-        <div className="w-full max-w-xl text-left mb-8 mt-8 md:mt-20">
-          <h1 className="text-4xl md:text-5xl font-bold mb-2 text-[#e5e9f7]">
-            Good evening<span className="text-[#7f9cf5]">.</span>
+          <h1
+            className="text-4xl md:text-5xl lg:text-6xl font-bold mb-3 tracking-tight"
+            style={{ color: "var(--text-primary)" }}
+          >
+            {greeting}
+            <span style={{ color: "var(--accent)" }}>.</span>
           </h1>
-          <p className="text-base md:text-lg text-[#bfc9d9] mb-8 max-w-md">
-            I'm ready to help you analyze data, generate code, or explore complex topics. What are we working on?
+
+          <p
+            className="text-base md:text-lg max-w-md mx-auto"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            {user?.username ? `Hi ${user.username}, w` : "W"}hat would you like to explore today?
           </p>
+        </div>
 
-          {/* Modern Search Bar (glassmorphism) */}
-          <div className="mb-6 w-full">
-            <div className="relative glass rounded-2xl bg-[#181f36]/50 border border-[#232946] shadow-md">
-              <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2">
-                <svg className="w-5 h-5 text-[#7f9cf5]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <circle cx="11" cy="11" r="8" />
-                  <path d="M21 21l-4.35-4.35" />
-                </svg>
-              </div>
-
-              <input
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                className="w-full bg-transparent text-white placeholder-[#bfc9d9] rounded-2xl pl-12 pr-12 py-4 outline-none focus:ring-2 focus:ring-[#7f9cf5]/60"
-                placeholder="Ask anything..."
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    onCreateChatFromSearch();
-                  }
-                }}
-              />
-
-              <button
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl bg-[#7f9cf5] hover:bg-[#5a6fdc] text-[#151a2b] flex items-center justify-center transition"
-                onClick={onCreateChatFromSearch}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path d="M12 19v-6m0 0V5m0 8h6m-6 0H6" />
-                </svg>
-              </button>
+        {/* Search Bar */}
+        <div className="mb-8">
+          <div
+            className="relative glass rounded-2xl overflow-hidden transition-all duration-300"
+            style={{ boxShadow: "var(--shadow-md)" }}
+          >
+            <div
+              className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"
+              style={{ color: "var(--accent)" }}
+            >
+              <IconSearch />
             </div>
-          </div>
 
-          <div className="flex flex-col gap-4">
-            <button className="flex items-center gap-3 bg-[#181f36] hover:bg-[#232946] rounded-xl px-4 py-3 text-[#bfc9d9] text-base font-medium transition">
-              <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-              </svg>
-              Summarize an article
-            </button>
-            <button className="flex items-center gap-3 bg-[#181f36] hover:bg-[#232946] rounded-xl px-4 py-3 text-[#bfc9d9] text-base font-medium transition">
-              <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
-                <path d="M7 11l5-5 5 5" />
-              </svg>
-              Write a code snippet
-            </button>
-            <button className="flex items-center gap-3 bg-[#181f36] hover:bg-[#232946] rounded-xl px-4 py-3 text-[#bfc9d9] text-base font-medium transition">
-              <svg className="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 8v4l3 3" />
-              </svg>
-              Analyze dataset
-            </button>
-            <button className="flex items-center gap-3 bg-[#181f36] hover:bg-[#232946] rounded-xl px-4 py-3 text-[#bfc9d9] text-base font-medium transition">
-              <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path d="M12 8v4l3 3" />
-                <circle cx="12" cy="12" r="10" />
-              </svg>
-              Debug an error
+            <input
+              id="home-search-input"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              className="w-full bg-transparent text-base py-4 pl-12 pr-14 outline-none"
+              style={{
+                color: "var(--text-primary)",
+                caretColor: "var(--accent)",
+              }}
+              placeholder="Ask anything…"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  onCreateChat();
+                }
+              }}
+              disabled={isSending}
+            />
+
+            <button
+              onClick={() => onCreateChat()}
+              disabled={isSending || !message.trim()}
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+              style={{
+                background: "var(--accent-gradient)",
+                color: "#fff",
+                border: "none",
+              }}
+              id="home-send-button"
+            >
+              {isSending ? (
+                <span
+                  className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin inline-block"
+                />
+              ) : (
+                <IconArrow />
+              )}
             </button>
           </div>
         </div>
-      </main>
 
-      <style>{`.glass{backdrop-filter:saturate(140%) blur(10px);}`}</style>
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {quickActions.map((action, idx) => (
+            <button
+              key={idx}
+              onClick={() => {
+                setMessage(action.prompt);
+                // Focus the input
+                document.getElementById("home-search-input")?.focus();
+              }}
+              className="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-left transition-all duration-200"
+              style={{
+                background: "var(--bg-surface)",
+                border: "1px solid var(--border)",
+                color: "var(--text-secondary)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "var(--bg-surface-hover)";
+                e.currentTarget.style.borderColor = "rgba(99,102,241,0.2)";
+                e.currentTarget.style.transform = "translateY(-1px)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "var(--bg-surface)";
+                e.currentTarget.style.borderColor = "var(--border)";
+                e.currentTarget.style.transform = "translateY(0)";
+              }}
+            >
+              <div
+                className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-110"
+                style={{
+                  background: `${action.color}15`,
+                  color: action.color,
+                  border: `1px solid ${action.color}25`,
+                }}
+              >
+                {action.icon}
+              </div>
+              <span className="text-sm font-medium">{action.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Footer hint */}
+        <p
+          className="text-center text-xs mt-8"
+          style={{ color: "var(--text-muted)" }}
+        >
+          Press Enter to send · Responses powered by Gemini AI
+        </p>
+      </div>
     </div>
   );
 }
 
 export default Home;
-

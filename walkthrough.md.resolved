@@ -1,0 +1,91 @@
+# Walkthrough: AI Chat History Integration System
+
+## Summary
+
+Built a complete persistent AI chat history system with a unified sidebar, modern ChatGPT/Perplexity-inspired UI, and production-ready responsive design. All changes pass lint and build with zero errors.
+
+---
+
+## Architecture Changes
+
+### Before → After
+
+```mermaid
+graph LR
+    subgraph Before
+        A["/home → Home.jsx<br/>(embedded sidebar)"]
+        B["/chat/:id → Chat.jsx<br/>(separate mini sidebar)"]
+    end
+    subgraph After
+        C["Layout.jsx<br/>(Sidebar + Outlet)"]
+        D["/home → Home.jsx<br/>(clean welcome page)"]
+        E["/chat/:id → Chat.jsx<br/>(modern chat UI)"]
+        C --> D
+        C --> E
+    end
+```
+
+**Key architectural shift**: Extracted a shared `Layout.jsx` wrapper with persistent `Sidebar.jsx` that appears on all authenticated pages via React Router nested routes. Eliminated duplicate sidebar implementations.
+
+---
+
+## Files Changed
+
+### New Files (3)
+
+| File | Purpose |
+|------|---------|
+| [Sidebar.jsx](file:///c:/Users/pawan/OneDrive/Desktop/protfolio.kapil/backend/perplexity/frontend/perplexity/src/features/chat/components/Sidebar.jsx) | Persistent sidebar with chat history list, user avatar, new chat button, delete functionality, loading skeletons, empty state |
+| [Layout.jsx](file:///c:/Users/pawan/OneDrive/Desktop/protfolio.kapil/backend/perplexity/frontend/perplexity/src/features/chat/components/Layout.jsx) | Shared layout wrapper — renders Sidebar + Outlet, loads chats once on mount, initializes socket |
+
+### Modified Files (8)
+
+| File | Changes |
+|------|---------|
+| [index.html](file:///c:/Users/pawan/OneDrive/Desktop/protfolio.kapil/backend/perplexity/frontend/perplexity/index.html) | Updated title, meta description, Google Fonts (Inter) preconnect |
+| [index.css](file:///c:/Users/pawan/OneDrive/Desktop/protfolio.kapil/backend/perplexity/frontend/perplexity/src/app/index.css) | Full design system: CSS variables, custom scrollbar, glassmorphism, animations (fadeInUp, slideInLeft, shimmer, typing dots) |
+| [chat.slice.js](file:///c:/Users/pawan/OneDrive/Desktop/protfolio.kapil/backend/perplexity/frontend/perplexity/src/features/chat/chat.slice.js) | Added `messages`, `currentChatId`, `sidebarOpen` state + `addMessage`, `prependChat`, `removeChat`, `clearMessages` reducers |
+| [chat.api.js](file:///c:/Users/pawan/OneDrive/Desktop/protfolio.kapil/backend/perplexity/frontend/perplexity/src/features/chat/sevices/chat.api.js) | **Bug fix**: `getChats()` now extracts `response.data.chats` instead of returning the full `{success, chats}` object |
+| [useChat.js](file:///c:/Users/pawan/OneDrive/Desktop/protfolio.kapil/backend/perplexity/frontend/perplexity/src/features/chat/hooks/useChat.js) | Added `loadMessages`, `handleDeleteChat`, `handleClearMessages`. Optimistic UI via Redux `addMessage` dispatch |
+| [app.routes.jsx](file:///c:/Users/pawan/OneDrive/Desktop/protfolio.kapil/backend/perplexity/frontend/perplexity/src/app/app.routes.jsx) | Nested routes: `/home` and `/chat/:chatId?` are children of `<Layout>` |
+| [Home.jsx](file:///c:/Users/pawan/OneDrive/Desktop/protfolio.kapil/backend/perplexity/frontend/perplexity/src/features/home/Home.jsx) | Complete redesign: removed embedded sidebar, centered layout with dynamic greeting, glassmorphism search bar, quick-action cards with hover animations |
+| [Chat.jsx](file:///c:/Users/pawan/OneDrive/Desktop/protfolio.kapil/backend/perplexity/frontend/perplexity/src/features/chat/pages/Chat.jsx) | Complete redesign: proper chat title from Redux, avatar message bubbles with gradient styling, copy-to-clipboard code blocks, typing indicator, auto-expanding textarea, sticky composer |
+| [chat.controller.js](file:///c:/Users/pawan/OneDrive/Desktop/protfolio.kapil/backend/perplexity/backend/src/controllers/chat.controller.js) | `getMessages` now returns `title` and `chatId` alongside messages |
+
+---
+
+## Key Bug Fixes
+
+1. **Data extraction bug**: `getChats()` was dispatching `{success: true, chats: [...]}` to Redux instead of just the array
+2. **Duplicate sidebars**: Home and Chat each had separate sidebar implementations — unified into one
+3. **Wrong chat title**: Chat page showed `Chat ${chatId.slice(-6)}` instead of the AI-generated title
+4. **Messages in local state**: Chat.jsx managed messages in `useState`, disconnected from Redux — now uses Redux store
+
+## Design System
+
+- **Font**: Inter (Google Fonts)
+- **Color palette**: Deep navy primary (`#0a0f1a`), indigo accent (`#6366f1`), with semantic colors
+- **Glassmorphism**: Blur + saturation backdrop filters
+- **Animations**: fadeInUp, slideInLeft, shimmer skeletons, typing dots
+- **Scrollbar**: Custom thin dark scrollbar (WebKit + Firefox)
+
+## Responsive Breakpoints
+
+| Breakpoint | Sidebar Behavior |
+|------------|-----------------|
+| Desktop (≥1024px) | Fixed 300px sidebar, always visible |
+| Tablet/Mobile (<1024px) | Hidden — hamburger button opens slide-in drawer with backdrop overlay |
+
+## Verification
+
+- ✅ `npm run lint` — 0 errors, 0 warnings
+- ✅ `npm run build` — Successful (150 modules, 4.99s)
+  - CSS: 26.51 kB (6.13 kB gzipped)
+  - JS: 432.49 kB (138.12 kB gzipped)
+
+## How to Test
+
+1. Start the backend: `cd backend && npm run dev`
+2. Start the frontend: `cd frontend/perplexity && npm run dev`
+3. Login → redirected to `/home`
+4. Test sidebar chat list, new chat creation, chat navigation, message persistence, responsive layout

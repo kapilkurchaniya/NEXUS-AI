@@ -7,6 +7,7 @@ function ResetPassword() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState('');
+  const [isSuccess, setIsSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [token, setToken] = useState('');
   const navigate = useNavigate();
@@ -24,10 +25,12 @@ function ResetPassword() {
     e.preventDefault();
     if (password !== confirmPassword) {
       setMessage('Passwords do not match');
+      setIsSuccess(false);
       return;
     }
     if (password.length < 6) {
       setMessage('Password must be at least 6 characters');
+      setIsSuccess(false);
       return;
     }
 
@@ -36,10 +39,12 @@ function ResetPassword() {
 
     try {
       await resetPassword({ token, password });
-      setMessage('Password reset successful! Redirecting to login...');
+      setMessage('Password reset successful! Redirecting to login…');
+      setIsSuccess(true);
       setTimeout(() => navigate('/'), 2000);
     } catch (err) {
       setMessage(err.message || 'Reset failed');
+      setIsSuccess(false);
     } finally {
       setLoading(false);
     }
@@ -47,34 +52,45 @@ function ResetPassword() {
 
   if (!token) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 px-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Invalid Reset Link</h2>
-          <Link to="/" className="text-blue-600 hover:underline">Back to Login</Link>
+      <div className="auth-page">
+        <div className="auth-card" style={{ textAlign: 'center' }}>
+          <div className="auth-logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          </div>
+          <h2>Invalid Reset Link</h2>
+          <div className="auth-links">
+            <p><Link to="/">Back to Login</Link></p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 px-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-bold text-gray-900">Reset Password</h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Enter your new password.
-          </p>
+    <div className="auth-page">
+      <div className="auth-card">
+        <div className="auth-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0110 0v4" />
+          </svg>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <h2>Reset Password</h2>
+        <p className="auth-subtitle">Enter your new password below.</p>
+
+        <form className="auth-form" onSubmit={handleSubmit}>
           {message && (
-            <div className={`px-4 py-3 rounded-md text-sm ${message.includes('successful') ? 'bg-green-50 border border-green-200 text-green-600' : 'bg-red-50 border border-red-200 text-red-600'}`}>
+            <div className={`auth-alert ${isSuccess ? 'success' : 'error'}`}>
               {message}
             </div>
           )}
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              New Password
-            </label>
+
+          <div className="form-group">
+            <label htmlFor="password">New Password</label>
             <input
               id="password"
               name="password"
@@ -83,14 +99,12 @@ function ResetPassword() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
-              className="appearance-none rounded-xl relative block w-full px-5 py-4 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
               placeholder="Enter new password"
             />
           </div>
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
-              Confirm Password
-            </label>
+
+          <div className="form-group">
+            <label htmlFor="confirmPassword">Confirm Password</label>
             <input
               id="confirmPassword"
               name="confirmPassword"
@@ -99,23 +113,17 @@ function ResetPassword() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               disabled={loading}
-              className="appearance-none rounded-xl relative block w-full px-5 py-4 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
               placeholder="Confirm new password"
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="group relative w-full flex justify-center py-4 px-4 border border-transparent text-sm font-medium rounded-xl text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition duration-200"
-          >
-            {loading ? 'Resetting...' : 'Reset Password'}
+          <button type="submit" disabled={loading} className="auth-btn">
+            {loading ? 'Resetting…' : 'Reset Password'}
           </button>
         </form>
-        <div className="text-center">
-          <Link to="/" className="block text-sm font-medium text-blue-600 hover:text-blue-500 mb-2">
-            Back to Login
-          </Link>
+
+        <div className="auth-links">
+          <p><Link to="/">Back to Login</Link></p>
         </div>
       </div>
     </div>
@@ -123,4 +131,3 @@ function ResetPassword() {
 }
 
 export default ResetPassword;
-

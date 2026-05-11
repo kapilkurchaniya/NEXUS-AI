@@ -8,7 +8,7 @@ const Protected = ({children}) => {
   const checked = useSelector((state) => state.auth.checked);
 
   if (!checked || loading) {
-      return <div>Loading...</div>;
+      return <div className="loading-screen"><div className="loading-spinner" /></div>;
   }
 
   if (!user) {

@@ -1,58 +1,121 @@
 import { useDispatch } from "react-redux";
+import { useCallback, useMemo, useRef } from "react";
 
 import {
   sendMessage,
-  getChats
-} from "../../chat/sevices/chat.api.js";
+  getChats,
+  getMessages,
+  deleteChat as deleteChatApi,
+} from "../sevices/chat.api.js";
 
 import {
   setChats,
+  setMessages,
+  addMessage,
   setError,
-  setLoading
+  setLoading,
+  setCurrentChatId,
+  removeChat,
+  clearMessages,
 } from "../chat.slice.js";
 
 import { initializeSocketConnection } from "../sevices/chat.socket.js";
-
-import { useCallback, useMemo, useRef } from "react";
 
 export const useChat = () => {
   const dispatch = useDispatch();
   const inFlightRef = useRef(false);
 
   const loadChats = useCallback(async () => {
-    const chats = await getChats();
-    dispatch(setChats(chats));
-    return chats;
+    try {
+      const chats = await getChats();
+      dispatch(setChats(Array.isArray(chats) ? chats : []));
+      return chats;
+    } catch (err) {
+      console.error("Failed to load chats:", err);
+      return [];
+    }
   }, [dispatch]);
 
-  const handleSendMessage = useCallback(async ({ chatId, message }) => {
-    // Prevent duplicate concurrent requests from UI
-    if (inFlightRef.current) return null;
-    inFlightRef.current = true;
+  const loadMessages = useCallback(
+    async (chatId) => {
+      if (!chatId) return [];
+      try {
+        const res = await getMessages(chatId);
+        const msgs = res?.messages ?? res ?? [];
+        dispatch(setMessages(msgs));
+        dispatch(setCurrentChatId(chatId));
+        return msgs;
+      } catch (err) {
+        console.error("Failed to load messages:", err);
+        dispatch(setMessages([]));
+        return [];
+      }
+    },
+    [dispatch]
+  );
 
-    try {
-      dispatch(setLoading(true));
+  const handleSendMessage = useCallback(
+    async ({ chatId, message }) => {
+      if (inFlightRef.current) return null;
+      inFlightRef.current = true;
 
-      const result = await sendMessage(chatId, message);
+      try {
+        dispatch(setLoading(true));
+        dispatch(setError(null));
 
-      // Keep sidebar in sync immediately after title creation
-      await loadChats();
-      return result;
-    } catch (error) {
-      dispatch(setError(error.message || "Failed to send message"));
-      return null;
-    } finally {
-      dispatch(setLoading(false));
-      inFlightRef.current = false;
-    }
-  }, [dispatch, loadChats]);
+        // Optimistic user message
+        dispatch(addMessage({ role: "user", content: message, _optimistic: true }));
+
+        const result = await sendMessage(chatId, message);
+
+        // Append AI response
+        if (result?.message) {
+          dispatch(addMessage({ role: "ai", content: result.message }));
+        }
+
+        // Refresh sidebar to show new/updated chat
+        await loadChats();
+
+        return result;
+      } catch (error) {
+        dispatch(setError(error.message || "Failed to send message"));
+        return null;
+      } finally {
+        dispatch(setLoading(false));
+        inFlightRef.current = false;
+      }
+    },
+    [dispatch, loadChats]
+  );
+
+  const handleDeleteChat = useCallback(
+    async (chatId) => {
+      try {
+        await deleteChatApi(chatId);
+        dispatch(removeChat(chatId));
+      } catch (err) {
+        dispatch(setError(err.message || "Failed to delete chat"));
+      }
+    },
+    [dispatch]
+  );
+
+  const handleClearMessages = useCallback(() => {
+    dispatch(clearMessages());
+    dispatch(setCurrentChatId(null));
+  }, [dispatch]);
 
   const stableSocket = useMemo(() => initializeSocketConnection, []);
 
-  return useMemo(() => ({
-    handleSendMessage,
-    loadChats,
-    initializeSocketConnection: stableSocket,
-  }), [handleSendMessage, loadChats, stableSocket]);
+  return useMemo(
+    () => ({
+      handleSendMessage,
+      loadChats,
+      loadMessages,
+      handleDeleteChat,
+      handleClearMessages,
+      initializeSocketConnection: stableSocket,
+    }),
+    [handleSendMessage, loadChats, loadMessages, handleDeleteChat, handleClearMessages, stableSocket]
+  );
 };
-

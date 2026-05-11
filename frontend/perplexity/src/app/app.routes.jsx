@@ -1,12 +1,12 @@
 import { createBrowserRouter } from "react-router";
-import Home from "../features/home/Home.jsx";
 import Login from "../features/auth/pages/Login.jsx";
 import Register from "../features/auth/pages/Register.jsx";
 import ForgetPassword from "../features/auth/pages/ForgetPassword.jsx";
 import ResetPassword from "../features/auth/pages/ResetPassword.jsx";
-import Dashboard from "../features/chat/pages/Dashboard.jsx";
+import Layout from "../features/chat/components/Layout.jsx";
+import Home from "../features/home/Home.jsx";
 import Chat from "../features/chat/pages/Chat.jsx";
-import Protected from "../features/auth/components/protected.jsx";
+import Protected from "../features/auth/components/Protected.jsx";
 
 export const router = createBrowserRouter([
   {
@@ -18,20 +18,29 @@ export const router = createBrowserRouter([
     element: <Register />,
   },
   {
-    path: "/home",
-    element: <Protected><Home /></Protected>
-  },
-  {
-    path: "/chat/:chatId?",
-    element: <Protected><Chat /></Protected>
-  },
-  {
     path: "/forgot-password",
     element: <ForgetPassword />,
   },
   {
     path: "/reset-password",
     element: <ResetPassword />,
-
+  },
+  {
+    // Protected layout with persistent sidebar
+    element: (
+      <Protected>
+        <Layout />
+      </Protected>
+    ),
+    children: [
+      {
+        path: "/home",
+        element: <Home />,
+      },
+      {
+        path: "/chat/:chatId?",
+        element: <Chat />,
+      },
+    ],
   },
 ]);

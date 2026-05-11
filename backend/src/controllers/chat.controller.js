@@ -159,6 +159,8 @@ export async function getMessages(req, res) {
 
     res.status(200).json({
         success: true,
+        title: chat.title,
+        chatId: chat._id,
         messages
     });
 }
