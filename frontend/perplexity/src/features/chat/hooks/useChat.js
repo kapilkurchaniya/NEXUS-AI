@@ -55,7 +55,7 @@ export const useChat = () => {
   );
 
   const handleSendMessage = useCallback(
-    async ({ chatId, message }) => {
+    async ({ chatId, message, images = [] }) => {
       if (inFlightRef.current) return null;
       inFlightRef.current = true;
 
@@ -63,10 +63,15 @@ export const useChat = () => {
         dispatch(setLoading(true));
         dispatch(setError(null));
 
-        // Optimistic user message
-        dispatch(addMessage({ role: "user", content: message, _optimistic: true }));
+        // Optimistic user message (with image previews)
+        dispatch(addMessage({
+          role: "user",
+          content: message,
+          images: images.map(img => ({ data: img.data, mimeType: img.mimeType, name: img.name })),
+          _optimistic: true,
+        }));
 
-        const result = await sendMessage(chatId, message);
+        const result = await sendMessage(chatId, message, images);
 
         // Append AI response
         if (result?.message) {
