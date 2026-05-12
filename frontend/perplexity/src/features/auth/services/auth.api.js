@@ -51,3 +51,9 @@ export async function resetPassword({ token, password }) {
 export async function getMe() {
     return request('/get-me');
 }
+
+export async function logout() {
+  return request('/logout', {
+    method: 'POST',
+  });
+}

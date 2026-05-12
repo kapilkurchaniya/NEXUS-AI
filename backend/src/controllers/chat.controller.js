@@ -1,6 +1,7 @@
 import {
     generateResponse,
-    generateChatTitle
+    generateChatTitle,
+    buildHumanMessage
 } from "../services/ai.service.js";
 
 import ChatModel from "../models/chat.model.js";
@@ -15,12 +16,12 @@ export async function sendMessage(req, res) {
 
     try {
 
-        const { message, chatId } = req.body;
+        const { message, chatId, images } = req.body;
 
-        if (!message) {
+        if (!message && (!images || images.length === 0)) {
             return res.status(400).json({
                 success: false,
-                message: "Message is required"
+                message: "Message or image is required"
             });
         }
 
@@ -30,7 +31,8 @@ export async function sendMessage(req, res) {
         // CREATE NEW CHAT
         if (!chatId) {
             // Generate a proper title using Mistral AI based on first user prompt
-            const generated = await generateChatTitle(message);
+            const titleSource = message || "Image analysis";
+            const generated = await generateChatTitle(titleSource);
             chatTitle = String(generated ?? "New Chat")
                 .replace(/^\s*['"]|['"]\s*$/g, "")
                 .replace(/\s+/g, " ")
@@ -62,34 +64,35 @@ export async function sendMessage(req, res) {
         const formattedMessages = [];
 
         for (const msg of oldMessages) {
-
             if (msg.role === "user") {
-
-                formattedMessages.push(
-                    new HumanMessage(msg.content)
-                );
-
+                // Rebuild multimodal messages if they had images
+                if (msg.images && msg.images.length > 0) {
+                    formattedMessages.push(buildHumanMessage(msg.content, msg.images));
+                } else {
+                    formattedMessages.push(new HumanMessage(msg.content));
+                }
             } else {
-
-                formattedMessages.push(
-                    new AIMessage(msg.content)
-                );
+                formattedMessages.push(new AIMessage(msg.content));
             }
         }
 
-        // ADD CURRENT USER MESSAGE
-        formattedMessages.push(
-            new HumanMessage(message)
-        );
+        // ADD CURRENT USER MESSAGE (with images if present)
+        const validImages = Array.isArray(images) ? images.filter(img => img.data && img.mimeType) : [];
+        formattedMessages.push(buildHumanMessage(message || "Describe this image.", validImages));
 
         // GENERATE AI RESPONSE WITH CONTEXT
         const aiResponse = await generateResponse(formattedMessages);
 
-        // SAVE USER MESSAGE
+        // SAVE USER MESSAGE (with images)
         await MessageModel.create({
             chat: chat._id,
-            content: message,
-            role: "user"
+            content: message || "📷 Image",
+            role: "user",
+            images: validImages.map(img => ({
+                data: img.data,
+                mimeType: img.mimeType,
+                name: img.name || "image",
+            })),
         });
 
         // SAVE AI MESSAGE

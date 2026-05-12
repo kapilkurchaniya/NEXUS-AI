@@ -2,6 +2,7 @@ import { RouterProvider } from "react-router"
 import { router } from "./app.routes.jsx"
 import { useAuth } from "../features/auth/hook/useAuth.js"
 import { useEffect } from "react"
+import Toast from "../features/auth/components/Toast.jsx"
 
 function App() { 
   const { handleGetMe } = useAuth()
@@ -11,7 +12,10 @@ function App() {
   }, [handleGetMe])
 
   return (
-    <RouterProvider router={router} />
+    <>
+      <RouterProvider router={router} />
+      <Toast />
+    </>
   )
 }
 

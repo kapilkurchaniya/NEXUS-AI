@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { login, register, verifyEmail , getMe , forgotPassword, resetPassword } from "../controllers/auth.controller.js";
+import { login, register, verifyEmail , getMe , forgotPassword, resetPassword, logout } from "../controllers/auth.controller.js";
 import { registerValidationRules, loginValidationRules, validate } from "../middlewares/authValidator.js";
 import {verifyuser} from "../middlewares/authmiddleware.js";
 
@@ -11,5 +11,6 @@ router.get("/verify-email", verifyEmail);
 router.get("/get-me", verifyuser, getMe);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
+router.post("/logout", logout);
 
 export default router;

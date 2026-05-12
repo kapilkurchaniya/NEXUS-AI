@@ -1,6 +1,6 @@
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatMistralAI } from "@langchain/mistralai";
-import { HumanMessage , SystemMessage  } from "@langchain/core/messages";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 
 const geminimodel = new ChatGoogleGenerativeAI({
   model: "gemini-2.5-flash-lite",
@@ -11,6 +11,32 @@ const mistralmodel = new ChatMistralAI({
   model: "mistral-small-latest",
   apiKey: process.env.MISTRAL_API_KEY,
 });
+
+/**
+ * Build a HumanMessage that can contain text + images (multimodal).
+ * If no images, returns a plain text HumanMessage.
+ */
+export function buildHumanMessage(text, images = []) {
+  if (!images || images.length === 0) {
+    return new HumanMessage(text);
+  }
+
+  // Multimodal content array for Gemini
+  const content = [
+    { type: "text", text: text || "Describe this image." },
+  ];
+
+  for (const img of images) {
+    content.push({
+      type: "image_url",
+      image_url: {
+        url: `data:${img.mimeType};base64,${img.data}`,
+      },
+    });
+  }
+
+  return new HumanMessage({ content });
+}
 
 export async function generateResponse(messages) {
 

@@ -51,6 +51,9 @@ const chatSlice = createSlice({
     clearMessages(state) {
       state.messages = [];
     },
+    resetChat() {
+      return initialState;
+    },
   },
 });
 
@@ -65,6 +68,7 @@ export const {
   prependChat,
   removeChat,
   clearMessages,
+  resetChat,
 } = chatSlice.actions;
 
 export default chatSlice.reducer;

@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router";
 import { useSelector, useDispatch } from "react-redux";
 import { setCurrentChatId, setSidebarOpen } from "../chat.slice";
+import { useAuth } from "../../auth/hook/useAuth";
 
 /* ── Icons (inline SVG) ── */
 const IconPlus = () => (
@@ -36,6 +37,27 @@ const IconMenu = () => (
     <line x1="3" y1="6" x2="21" y2="6" />
     <line x1="3" y1="12" x2="21" y2="12" />
     <line x1="3" y1="18" x2="21" y2="18" />
+  </svg>
+);
+
+const IconLogout = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+    <polyline points="16 17 21 12 16 7" />
+    <line x1="21" y1="12" x2="9" y2="12" />
+  </svg>
+);
+
+const IconSettings = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1.08-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1.08 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+  </svg>
+);
+
+const IconChevron = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="6 9 12 15 18 9" />
   </svg>
 );
 
@@ -179,6 +201,76 @@ function ChatItem({ chat, isActive, onSelect, onDelete }) {
   );
 }
 
+/* ── Profile Dropdown ── */
+function ProfileDropdown({ user, onLogout, isLoggingOut, isOpen, onClose }) {
+  const dropdownRef = useRef(null);
+
+  // Close on click outside
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClick = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        onClose();
+      }
+    };
+    const handleEscape = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div ref={dropdownRef} className="profile-dropdown" id="profile-dropdown">
+      {/* Profile Header */}
+      <div className="profile-dropdown-header">
+        <div className="profile-dropdown-avatar">
+          {user?.username?.charAt(0)?.toUpperCase() || "U"}
+        </div>
+        <div className="profile-dropdown-info">
+          <div className="profile-dropdown-name">
+            {user?.username || "User"}
+          </div>
+          <div className="profile-dropdown-email">
+            {user?.email || "user@email.com"}
+          </div>
+        </div>
+      </div>
+
+      <div className="profile-dropdown-divider" />
+
+      {/* Settings */}
+      <button className="profile-dropdown-item" id="settings-button">
+        <IconSettings />
+        <span>Settings</span>
+      </button>
+
+      <div className="profile-dropdown-divider" />
+
+      {/* Logout */}
+      <button
+        className="profile-dropdown-item profile-dropdown-logout"
+        onClick={onLogout}
+        disabled={isLoggingOut}
+        id="logout-button"
+      >
+        {isLoggingOut ? (
+          <span className="logout-spinner" />
+        ) : (
+          <IconLogout />
+        )}
+        <span>{isLoggingOut ? "Signing out…" : "Sign Out"}</span>
+      </button>
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════
    SIDEBAR COMPONENT
    ══════════════════════════════════════════ */
@@ -186,11 +278,15 @@ export default function Sidebar({ isLoading }) {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { chatId } = useParams();
+  const { handleLogout } = useAuth();
 
   const { chats, sidebarOpen } = useSelector((s) => s.chat);
   const user = useSelector((s) => s.auth.user);
 
   const chatList = useMemo(() => (Array.isArray(chats) ? chats : []), [chats]);
+
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const onSelectChat = (id) => {
     dispatch(setCurrentChatId(id));
@@ -210,35 +306,62 @@ export default function Sidebar({ isLoading }) {
     window.dispatchEvent(event);
   };
 
+  const onLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await handleLogout();
+    } catch {
+      // handleLogout already handles errors
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
   const closeSidebar = () => dispatch(setSidebarOpen(false));
   const openSidebar = () => dispatch(setSidebarOpen(true));
 
   /* ── Sidebar content (shared between desktop & mobile) ── */
   const sidebarContent = (
     <div className="flex flex-col h-full">
-      {/* Header / User */}
+      {/* Profile Trigger */}
       <div className="px-4 pt-5 pb-4">
-        <div className="flex items-center gap-3 mb-5">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold"
-            style={{ background: "var(--accent-gradient)", color: "#fff" }}
+        <div className="relative">
+          <button
+            className="profile-trigger"
+            onClick={() => setProfileOpen((p) => !p)}
+            aria-expanded={profileOpen}
+            aria-haspopup="true"
+            id="profile-trigger"
           >
-            {user?.username?.charAt(0)?.toUpperCase() || "U"}
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
-              {user?.username || "User"}
+            <div className="profile-trigger-avatar">
+              {user?.username?.charAt(0)?.toUpperCase() || "U"}
             </div>
-            <div className="text-xs" style={{ color: "var(--text-accent)" }}>
-              Pro Plan
+            <div className="profile-trigger-info">
+              <div className="profile-trigger-name">
+                {user?.username || "User"}
+              </div>
+              <div className="profile-trigger-plan">
+                Pro Plan
+              </div>
             </div>
-          </div>
+            <div className={`profile-trigger-chevron ${profileOpen ? "profile-trigger-chevron-open" : ""}`}>
+              <IconChevron />
+            </div>
+          </button>
+
+          <ProfileDropdown
+            user={user}
+            onLogout={onLogout}
+            isLoggingOut={isLoggingOut}
+            isOpen={profileOpen}
+            onClose={() => setProfileOpen(false)}
+          />
         </div>
 
         {/* New Chat Button */}
         <button
           onClick={onNewChat}
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200"
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 mt-4"
           style={{
             background: "var(--accent-gradient)",
             color: "#fff",

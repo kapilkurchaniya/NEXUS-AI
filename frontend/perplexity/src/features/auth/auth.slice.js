@@ -21,8 +21,14 @@ const authSlice = createSlice({
         setChecked: (state, action) => {
             state.checked = action.payload;
         },
+        clearAuth: (state) => {
+            state.user = null;
+            state.loading = false;
+            state.error = null;
+            state.checked = true;
+        },
     }
 });
 
-export const { setUser, setLoading, setError, setChecked } = authSlice.actions;
+export const { setUser, setLoading, setError, setChecked, clearAuth } = authSlice.actions;
 export default authSlice.reducer;

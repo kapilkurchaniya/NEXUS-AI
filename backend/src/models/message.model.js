@@ -1,4 +1,4 @@
-﻿import mongoose from 'mongoose';
+import mongoose from 'mongoose';
 
 const messageSchema = new mongoose.Schema({
   chat: {
@@ -15,6 +15,11 @@ const messageSchema = new mongoose.Schema({
     enum: ['user', 'ai'],
     default: 'user',
   },
+  images: [{
+    data: { type: String },
+    mimeType: { type: String },
+    name: { type: String },
+  }],
 }, {
   timestamps: true,
 });
