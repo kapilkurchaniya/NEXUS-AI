@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config();
 import jwt from "jsonwebtoken";
+import BlacklistModel from "../models/blacklistModel.js";
 
  
 export async function verifyuser(req, res, next) {
@@ -10,6 +11,12 @@ export async function verifyuser(req, res, next) {
     }
 
     try {
+        // Check if token has been blacklisted (user logged out)
+        const isBlacklisted = await BlacklistModel.findOne({ token });
+        if (isBlacklisted) {
+            return res.status(401).json({ message: "Token has been invalidated. Please login again." });
+        }
+
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.user = decoded;
         next(); 

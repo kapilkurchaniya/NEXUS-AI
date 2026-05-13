@@ -1,4 +1,5 @@
 import UserModel from "../models/user.model.js";
+import BlacklistModel from "../models/blacklistModel.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../services/mail.service.js";
@@ -307,6 +308,12 @@ export async function resetPassword(req, res) {
 
 export async function logout(req, res) {
   try {
+    const token = req.cookies.token || req.headers.authorization?.split(" ")[1];
+
+    if (token) {
+      await BlacklistModel.create({ token });
+    }
+
     res.clearCookie("token", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
