@@ -542,7 +542,7 @@ function Chat() {
           </div>
 
           <div className="composer-hints">
-            <span>Shift+Enter for new line · Paste or drop images</span>
+            <span>Shift+Enter for new line & Paste or drop images</span>
             <span style={{ color: "var(--text-accent)" }}>{chatId ? "Thread" : "New chat"}</span>
           </div>
         </div>
