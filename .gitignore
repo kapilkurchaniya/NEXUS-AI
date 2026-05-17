@@ -5,7 +5,8 @@ node_modules/
 dist/
 
 # Environment variables
-.env*
+.env
+.env.*
 
 # Testing and Coverage
 coverage/

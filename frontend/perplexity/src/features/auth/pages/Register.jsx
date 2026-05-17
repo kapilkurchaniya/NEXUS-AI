@@ -29,7 +29,7 @@ function Register() {
     try {
       await handleRegister({ email, username, password });
       setSuccess('Check your email to verify your account, then login.');
-      setTimeout(() => navigate('/'), 2000);
+      setTimeout(() => navigate('/login'), 2000);
     } catch (err) {
       setError(err.message || 'Registration failed');
     } finally {
