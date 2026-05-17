@@ -1,4 +1,7 @@
-const API_BASE = 'http://localhost:3000/api/auth';
+const API_BASE = import.meta.env.VITE_API_BASE
+  ? `${import.meta.env.VITE_API_BASE}/api/auth`
+  : 'https://nexus-ai-two-snowy.vercel.app/api/auth';
+
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
