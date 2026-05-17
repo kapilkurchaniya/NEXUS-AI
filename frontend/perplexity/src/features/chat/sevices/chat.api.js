@@ -1,12 +1,9 @@
 import axios from "axios";
 
 const api = axios.create({
-  // Deployed backend URL (Vercel)
-  // If you set VITE_API_BASE in Vercel, it will override this value.
-  baseURL: import.meta.env.VITE_API_BASE ?? "https://nexus-ai-two-snowy.vercel.app",
+  baseURL: import.meta.env.VITE_API_BASE,
   withCredentials: true,
 });
-
 
 export async function sendMessage(chatId, message, images = []) {
   const response = await api.post(`/api/chat/message`, { chatId, message, images });

@@ -7,14 +7,10 @@ export const initializeSocketConnection = () => {
   if (socketInstance && socketInstance.connected) return socketInstance;
   if (socketInstance) return socketInstance;
 
-  socketInstance = io(
-    import.meta.env.VITE_SOCKET_URL ?? "https://nexus-ai-two-snowy.vercel.app",
-    {
-      withCredentials: true,
-      transports: ["websocket"],
-    }
-  );
-
+  socketInstance = io("http://localhost:3000", {
+    withCredentials: true,
+    transports: ["websocket"],
+  });
 
   socketInstance.on("connect", () => {
     console.log("Connected to socket server with id: " + socketInstance.id);
