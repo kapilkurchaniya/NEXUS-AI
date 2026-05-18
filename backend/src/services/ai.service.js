@@ -16,7 +16,9 @@ import { searchWeb } from "./internet.services.js";
 // ── Custom error class for rate limits ──
 export class RateLimitError extends Error {
   constructor(retryAfterSeconds = 60) {
-    super(`Rate limit exceeded. Please wait ${retryAfterSeconds} seconds before trying again.`);
+    super(
+      `Rate limit exceeded. Please wait ${retryAfterSeconds} seconds before trying again.`
+    );
     this.name = "RateLimitError";
     this.retryAfter = retryAfterSeconds;
     this.statusCode = 429;
@@ -28,224 +30,261 @@ function withTimeout(promise, ms = 30000) {
   return Promise.race([
     promise,
     new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("AI request timed out. Please try again.")), ms)
+      setTimeout(
+        () => reject(new Error("AI request timed out. Please try again.")),
+        ms
+      )
     ),
   ]);
 }
 
-// ── Sleep helper for retry delays ──
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// ── Helper: detect rate-limit errors from various error shapes ──
+// ── Detect rate-limit errors ──
 function isRateLimitError(error) {
   if (error.status === 429 || error.statusCode === 429) return true;
   const msg = String(error.message || "");
-  return msg.includes("429") || msg.includes("Too Many Requests") || msg.includes("quota");
+  return (
+    msg.includes("429") ||
+    msg.includes("Too Many Requests") ||
+    msg.includes("quota")
+  );
 }
 
-// ── Extract retry delay from error details ──
+// ── Extract retry delay ──
 function getRetryDelay(error) {
   try {
     if (error.errorDetails) {
-      const retryInfo = error.errorDetails.find(
-        (d) => d["@type"]?.includes("RetryInfo")
+      const retryInfo = error.errorDetails.find((d) =>
+        d["@type"]?.includes("RetryInfo")
       );
-      if (retryInfo?.retryDelay) {
-        return parseInt(retryInfo.retryDelay, 10) || 60;
-      }
+      if (retryInfo?.retryDelay) return parseInt(retryInfo.retryDelay, 10) || 60;
     }
-  } catch {
-    // ignore parse errors
-  }
+  } catch {}
   return 60;
 }
 
+// ── Get today's date string ──
+function getTodayString() {
+  return new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+// ── Queries that are clearly NOT worth searching (pure computation/creative) ──
+const SKIP_SEARCH_PATTERNS = [
+  /^\s*(?:what is|what's|calculate|compute|solve|simplify)\s+[\d\s+\-*/^()]+\s*[=?]?\s*$/i,
+  /^(?:hello|hi|hey|thanks|thank you|bye|goodbye)\b/i,
+  /^(?:write me|write a|generate a|create a|make a)\s+(?:poem|story|essay|code|function|class|script)/i,
+  /^(?:explain|define|what does|what is the meaning of)\s+\w+\s*$/i,
+];
+
+function isDefinitelyOffline(query = "") {
+  return SKIP_SEARCH_PATTERNS.some((re) => re.test(query.trim()));
+}
+
 // ── Model initialization ──
-// maxRetries: 0 prevents LangChain from automatically retrying 429 errors,
-// which was causing it to burn through the entire quota while the user waited.
-const geminimodel = new ChatGoogleGenerativeAI({
+const geminiModel = new ChatGoogleGenerativeAI({
   model: "gemini-2.0-flash",
   apiKey: process.env.GOOGLE_API_KEY,
   maxRetries: 0,
 });
 
-const mistralmodel = new ChatMistralAI({
+const mistralModel = new ChatMistralAI({
   model: "mistral-small-latest",
   apiKey: process.env.MISTRAL_API_KEY,
   maxRetries: 0,
 });
 
-// Mistral model with tools for fallback
-const mistralModelWithTools = mistralmodel.bindTools?.([]) || mistralmodel;
-
-// --- Web search tool definition ---
+// ── Web search tool (for Gemini tool-calling) ──
 const webSearchTool = tool(
   async ({ query, limit }) => {
-    const result = await searchWeb(query, limit);
-    return JSON.stringify(result);
+    console.log(`🔍 [Gemini tool] Searching: "${query}"`);
+    return await searchWeb(query, limit);
   },
   {
     name: "web_search",
     description:
-      "Search the web using Tavily. ONLY use this tool when the user's question requires up-to-date, real-time, or external information such as: current news, today's weather, live scores, stock prices, recent events, or facts you are unsure about. Do NOT call this tool for general knowledge, greetings, opinions, coding help, math, or anything you can answer confidently from your training data.",
+      "Search the internet for real-time or recent information. " +
+      "Use this for ANY question about: current events, news, prices, weather, " +
+      "sports scores, new releases, recent developments, or any fact that may " +
+      "have changed. When uncertain whether info is current, search instead of guessing.",
     schema: z.object({
-      query: z.string().describe("Search query"),
-      limit: z.number().default(4).describe("Maximum results"),
+      query: z.string().describe("The search query"),
+      limit: z.number().default(5).describe("Number of results"),
     }),
   }
 );
 
 const toolsByName = { web_search: webSearchTool };
+const geminiWithTools = geminiModel.bindTools([webSearchTool]);
 
-// Bind the tool to Gemini so it *can* call it, but won't be forced to
-const modelWithTools = geminimodel.bindTools([webSearchTool]);
+// ── Build system prompt with today's date + optional live web results ──
+function buildSystemPrompt(webContext = null) {
+  const today = getTodayString();
 
-// --- System prompt ---
-const SYSTEM_PROMPT = new SystemMessage(
-  `You are a helpful, accurate AI assistant. Follow these rules strictly:
+  const webSection = webContext
+    ? `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LIVE WEB SEARCH RESULTS (fetched right now):
+${webContext}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+IMPORTANT: Use the above search results to answer. Do NOT rely on your training data for facts covered above.`
+    : "";
 
-1. For general knowledge, greetings, coding help, explanations, math, creative writing, or anything you can confidently answer from your training data — respond DIRECTLY without calling any tools.
-2. ONLY call the web_search tool when the user explicitly asks about:
-   - Current/recent news or events
-   - Today's date, weather, live scores, or stock prices
-   - Information that changes frequently or that you are genuinely unsure about
-3. When in doubt, answer directly WITHOUT using tools.
-4. Always provide well-structured, helpful responses.`
-);
+  return new SystemMessage(
+    `You are a helpful AI assistant similar to Perplexity AI. Today is ${today}.
 
-// --- Helpers ---
-export function buildHumanMessage(text, images = []) {
-  if (!images || images.length === 0) {
-    return new HumanMessage(text);
+KEY RULES:
+1. If live web search results are provided below, use them — they are more accurate than your training data.
+2. For facts, news, prices, events, or anything time-sensitive, rely on the search results.
+3. For pure computation (math), creative tasks, or coding, answer from your own knowledge.
+4. Always be accurate. If unsure and no results are provided, say so honestly.
+5. Cite the source title or URL from results when helpful.${webSection}`
+  );
+}
+
+// ── Extract plain text from the last HumanMessage ──
+function extractLastUserText(messages) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg instanceof HumanMessage) {
+      if (typeof msg.content === "string") return msg.content;
+      if (Array.isArray(msg.content)) {
+        const textPart = msg.content.find((c) => c.type === "text");
+        return textPart?.text || "";
+      }
+    }
   }
+  return "";
+}
 
-  const content = [
-    {
-      type: "text",
-      text: text || "Describe this image.",
-    },
-  ];
+// ── Pre-fetch web results and return as a plain string ──
+async function fetchWebContext(userQuery) {
+  try {
+    console.log(`🌐 Pre-fetching web results for: "${userQuery}"`);
+    const results = await withTimeout(searchWeb(userQuery, 5), 20000);
+    if (!results || results.includes("unavailable") || results.includes("No relevant")) {
+      return null;
+    }
+    return results;
+  } catch (err) {
+    console.warn("⚠️ Web pre-fetch failed:", err.message);
+    return null;
+  }
+}
 
+// ── Helpers ──
+export function buildHumanMessage(text, images = []) {
+  if (!images || images.length === 0) return new HumanMessage(text);
+
+  const content = [{ type: "text", text: text || "Describe this image." }];
   for (const img of images) {
     content.push({
       type: "image_url",
-      image_url: {
-        url: `data:${img.mimeType};base64,${img.data}`,
-      },
+      image_url: { url: `data:${img.mimeType};base64,${img.data}` },
     });
   }
-
   return new HumanMessage({ content });
 }
 
 // ── Gemini call with tool-calling loop ──
 async function callGemini(allMessages) {
-  // First LLM call — with a 30-second timeout
-  let response = await withTimeout(modelWithTools.invoke(allMessages), 30000);
+  let response = await withTimeout(geminiWithTools.invoke(allMessages), 35000);
 
-  // If the model decided to call a tool, execute it and call once more
   if (response.tool_calls && response.tool_calls.length > 0) {
-    // Add the AI's tool-call message to the conversation
     allMessages.push(response);
-
-    // Execute each tool call (with its own timeout)
     for (const tc of response.tool_calls) {
       const selectedTool = toolsByName[tc.name];
       if (!selectedTool) continue;
-
-      const toolResult = await withTimeout(selectedTool.invoke(tc.args), 15000);
-      allMessages.push(
-        new ToolMessage({
-          content: toolResult,
-          tool_call_id: tc.id,
-        })
-      );
+      const toolResult = await withTimeout(selectedTool.invoke(tc.args), 20000);
+      allMessages.push(new ToolMessage({ content: toolResult, tool_call_id: tc.id }));
     }
-
-    // Second LLM call — with the search results (30s timeout)
-    response = await withTimeout(geminimodel.invoke(allMessages), 30000);
+    response = await withTimeout(geminiModel.invoke(allMessages), 35000);
   }
 
   return response.content;
 }
 
-// ── Mistral fallback call (no tool-calling, just plain chat) ──
+// ── Mistral call (no tool-calling — web context already injected) ──
 async function callMistral(messages) {
-  console.log("⚡ Falling back to Mistral model...");
-  const response = await withTimeout(mistralmodel.invoke(messages), 30000);
+  console.log("⚡ Falling back to Mistral...");
+  const response = await withTimeout(mistralModel.invoke(messages), 35000);
   return response.content;
 }
 
-// --- Main response generator with automatic Mistral fallback ---
+// ── Main response generator ──
 export async function generateResponse(messages) {
-  const allMessages = [SYSTEM_PROMPT, ...messages];
+  const userQuery = extractLastUserText(messages);
+  console.log(`📝 User query: "${userQuery.slice(0, 80)}"`);  
 
-  // ── Attempt 1: Try Gemini ──
+  // ── Optionally pre-fetch web results ──
+  // Skip only for obvious offline queries (math, greetings, creative writing)
+  const skipSearch = isDefinitelyOffline(userQuery);
+  let webContext = null;
+
+  if (!skipSearch && userQuery.trim().length > 3) {
+    webContext = await fetchWebContext(userQuery);
+  } else {
+    console.log("⏭️  Skipping web search (offline query detected)");
+  }
+
+  // Build ONE system prompt that embeds web results inline (Gemini requires single SystemMessage first)
+  const systemPrompt = buildSystemPrompt(webContext);
+  const allMessages = [systemPrompt, ...messages];
+
+  // ── Attempt 1: Gemini (with tool-calling for follow-up searches) ──
   try {
     console.log("🔷 Trying Gemini...");
     const content = await callGemini([...allMessages]);
     console.log("✅ Gemini responded successfully");
     return content;
   } catch (geminiError) {
-    // If it's NOT a rate limit error, don't bother retrying — throw immediately
     if (!isRateLimitError(geminiError)) {
-      // Check for timeout
       if (geminiError.message?.includes("timed out")) {
-        const timeoutErr = new Error(geminiError.message);
-        timeoutErr.statusCode = 504;
-        throw timeoutErr;
+        const err = new Error(geminiError.message);
+        err.statusCode = 504;
+        throw err;
       }
       console.error("❌ Gemini failed (non-rate-limit):", geminiError.message);
       throw new Error("Failed to generate AI response. Please try again.");
     }
-
     const retryDelay = getRetryDelay(geminiError);
     console.warn(`⚠️ Gemini rate-limited (retry after ${retryDelay}s). Falling back to Mistral...`);
   }
 
-  // ── Attempt 2: Fall back to Mistral immediately ──
+  // ── Attempt 2: Mistral — web results already in system prompt ──
   try {
     const content = await callMistral([...allMessages]);
     console.log("✅ Mistral responded successfully (fallback)");
     return content;
   } catch (mistralError) {
     console.error("❌ Mistral fallback also failed:", mistralError.message);
-
-    // If Mistral also rate-limited, throw a clean error
-    if (isRateLimitError(mistralError)) {
-      throw new RateLimitError(60);
-    }
-
-    // Check for timeout
+    if (isRateLimitError(mistralError)) throw new RateLimitError(60);
     if (mistralError.message?.includes("timed out")) {
-      const timeoutErr = new Error(mistralError.message);
-      timeoutErr.statusCode = 504;
-      throw timeoutErr;
+      const err = new Error(mistralError.message);
+      err.statusCode = 504;
+      throw err;
     }
-
     throw new Error("Both AI models are unavailable. Please try again later.");
   }
 }
 
-// --- Chat title generator (uses Mistral) ---
+// ── Chat title generator ──
 export async function generateChatTitle(message) {
   try {
     const response = await withTimeout(
-      mistralmodel.invoke([
+      mistralModel.invoke([
         new SystemMessage(
-          "Generate a short chat title under 8 words. Return only title."
+          "Generate a short, descriptive chat title under 8 words. Return ONLY the title, no quotes."
         ),
         new HumanMessage(message),
       ]),
       10000
     );
-
     return response.content;
   } catch (error) {
     console.error("Error generating chat title:", error);
-    // Don't fail the whole request just because title generation failed
     return "New Chat";
   }
 }
