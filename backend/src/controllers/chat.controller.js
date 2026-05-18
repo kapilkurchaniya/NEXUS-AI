@@ -113,9 +113,19 @@ export async function sendMessage(req, res) {
 
         console.log("Error in sendMessage controller:", error);
 
-        res.status(500).json({
+        // Return specific status codes so frontend can handle them
+        const statusCode = error.statusCode || 500;
+        const message =
+            error.name === "RateLimitError"
+                ? error.message
+                : error.message?.includes("timed out")
+                    ? "Request timed out. Please try again."
+                    : error.message || "Something went wrong. Please try again.";
+
+        res.status(statusCode).json({
             success: false,
-            message: error.message
+            message,
+            retryAfter: error.retryAfter || null,
         });
     }
 

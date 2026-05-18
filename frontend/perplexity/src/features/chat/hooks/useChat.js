@@ -83,7 +83,17 @@ export const useChat = () => {
 
         return result;
       } catch (error) {
-        dispatch(setError(error.message || "Failed to send message"));
+        // Show the actual server error (rate limit, timeout, etc.)
+        const errorMsg = error.message || "Failed to send message. Please try again.";
+        dispatch(setError(errorMsg));
+
+        // Mark the last optimistic message as failed so Retry button appears
+        dispatch(addMessage({
+          role: "ai",
+          content: `⚠️ ${errorMsg}`,
+          _failed: true,
+        }));
+
         return null;
       } finally {
         dispatch(setLoading(false));
