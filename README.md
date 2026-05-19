@@ -1,4 +1,4 @@
-# 🔮 Nexus AI
+# 🔮 Nexus AI -
 
 A modern, full-stack AI chat application powered by **Google Gemini** and **Mistral AI**. Built with a premium glassmorphic dark UI, real-time AI conversations, image analysis, and a magical user experience.
 
