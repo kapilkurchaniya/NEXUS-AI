@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:3000/api/auth';
+ const API_BASE = 'http://localhost:3000/api/auth';
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
