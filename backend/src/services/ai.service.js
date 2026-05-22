@@ -86,15 +86,14 @@ function isDefinitelyOffline(query = "") {
 
 // ── Model initialization ──
 const geminiModel = new ChatGoogleGenerativeAI({
-  model: "gemini-2.0-flash",
+  // Google model id format expected by @langchain/google-genai
+  model: process.env.GOOGLE_GEMINI_MODEL || "gemini-2.5-flash",
   apiKey: process.env.GOOGLE_API_KEY,
-  maxRetries: 0,
 });
 
 const mistralModel = new ChatMistralAI({
   model: "mistral-small-latest",
   apiKey: process.env.MISTRAL_API_KEY,
-  maxRetries: 0,
 });
 
 // ── Web search tool (for Gemini tool-calling) ──
@@ -235,7 +234,7 @@ export async function generateResponse(messages) {
 
   // ── Attempt 1: Gemini (with tool-calling for follow-up searches) ──
   try {
-    console.log("🔷 Trying Gemini...");
+    console.log(`🔷 Trying Gemini model: ${geminiModel?.model || "(unknown)"}...`);
     const content = await callGemini([...allMessages]);
     console.log("✅ Gemini responded successfully");
     return content;
