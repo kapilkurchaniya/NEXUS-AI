@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 
 /* ── Toast event system (no external deps) ── */
-const TOAST_EVENT = "app-toast";
+ const TOAST_EVENT = "app-toast";
 
 /**
  * Call from anywhere to show a toast notification.
